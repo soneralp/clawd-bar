@@ -11,6 +11,7 @@ final class TransitionTests: XCTestCase {
         notification: String? = nil,
         lastMessage: String? = nil,
         error: String? = nil,
+        source: String? = nil,
         file: StaticString = #filePath,
         line: UInt = #line
     ) -> HookEvent {
@@ -19,6 +20,7 @@ final class TransitionTests: XCTestCase {
         json["notification_type"] = notification
         json["last_assistant_message"] = lastMessage
         json["error_type"] = error
+        json["source"] = source
         let data = try! JSONSerialization.data(withJSONObject: json)
         guard let event = HookEvent(jsonData: data) else {
             XCTFail("HookEvent failed to parse", file: file, line: line)
@@ -36,10 +38,10 @@ final class TransitionTests: XCTestCase {
         Transition.apply(event, to: record, pid: 99, now: now)
     }
 
-    func testSessionStartCreatesRunningRecord() throws {
-        let record = try XCTUnwrap(apply(event("SessionStart"), to: nil))
-        XCTAssertEqual(record.state, .running)
-        XCTAssertEqual(record.detail, "Started")
+    func testSessionStartCreatesReadyRecord() throws {
+        let record = try XCTUnwrap(apply(event("SessionStart", source: "startup"), to: nil))
+        XCTAssertEqual(record.state, .done)
+        XCTAssertEqual(record.detail, "Ready")
         XCTAssertEqual(record.project, "my-app")
         XCTAssertEqual(record.stateSince, now)
         XCTAssertEqual(record.updatedAt, now)
@@ -167,6 +169,7 @@ final class TransitionTests: XCTestCase {
         let before = current(.waiting)
         let record = try XCTUnwrap(apply(event("FooEvent"), to: before))
         var expected = before
+        expected.pid = 99
         expected.updatedAt = now
         XCTAssertEqual(record, expected)
     }
@@ -183,9 +186,27 @@ final class TransitionTests: XCTestCase {
         XCTAssertEqual(record.updatedAt, now)
     }
 
-    func testExistingRecordKeepsItsPID() throws {
+    func testSessionStartAfterClearResetsToReady() throws {
+        let record = try XCTUnwrap(apply(event("SessionStart", source: "clear"), to: current(.running, subagents: 2)))
+        XCTAssertEqual(record.state, .done)
+        XCTAssertEqual(record.subagents, 0)
+    }
+
+    func testSessionStartAfterCompactKeepsState() throws {
+        let record = try XCTUnwrap(apply(event("SessionStart", source: "compact"), to: current(.running, subagents: 1)))
+        XCTAssertEqual(record.state, .running)
+        XCTAssertEqual(record.subagents, 1)
+        XCTAssertEqual(record.stateSince, 50)
+    }
+
+    func testUserPromptSubmitResetsStaleSubagents() throws {
+        let record = try XCTUnwrap(apply(event("UserPromptSubmit"), to: current(.running, subagents: 3)))
+        XCTAssertEqual(record.subagents, 0)
+    }
+
+    func testRecordTakesThePIDItIsGiven() throws {
         let record = try XCTUnwrap(apply(event("UserPromptSubmit"), to: current(.done)))
-        XCTAssertEqual(record.pid, 7)
+        XCTAssertEqual(record.pid, 99)
     }
 
     func testProjectNameFromCwd() {

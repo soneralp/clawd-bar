@@ -1,7 +1,8 @@
 import Foundation
 
 /// Calls `onChange` (debounced, on the main queue) whenever entries in a
-/// directory are added, removed or renamed.
+/// directory are added, removed or renamed. If the directory itself is
+/// deleted or moved, it is recreated and watched again.
 final class DirectoryWatcher {
     private let url: URL
     private let debounce: TimeInterval
@@ -27,7 +28,13 @@ final class DirectoryWatcher {
         let source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: descriptor, eventMask: [.write, .rename, .delete], queue: .main
         )
-        source.setEventHandler { [weak self] in self?.scheduleChange() }
+        source.setEventHandler { [weak self, weak source] in
+            guard let self else { return }
+            if let events = source?.data, !events.isDisjoint(with: [.delete, .rename]) {
+                self.restart()
+            }
+            self.scheduleChange()
+        }
         source.setCancelHandler { close(descriptor) }
         source.resume()
         self.source = source
@@ -37,6 +44,15 @@ final class DirectoryWatcher {
         pending?.cancel()
         source?.cancel()
         source = nil
+    }
+
+    private func restart() {
+        do {
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        } catch {
+            NSLog("Clawd Bar: cannot recreate \(url.path): \(error)")
+        }
+        start()
     }
 
     private func scheduleChange() {

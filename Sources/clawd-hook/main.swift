@@ -18,16 +18,24 @@ guard let event = HookEvent(jsonData: input) else {
 }
 
 let store = SessionStore(directory: SessionStore.defaultDirectory)
-let current = store.read(sessionId: event.sessionId)
-let pid = current?.pid ?? ProcessTree.claudePID()
+do {
+    try store.withLock(sessionId: event.sessionId) {
+        let current = store.read(sessionId: event.sessionId)
+        // Re-detect the owner on start/resume, or when the stored process is gone.
+        let pid: Int32
+        if let stored = current?.pid, event.name != "SessionStart", ProcessTree.isAlive(stored) {
+            pid = stored
+        } else {
+            pid = ProcessTree.claudePID()
+        }
 
-if let updated = Transition.apply(event, to: current, pid: pid, now: Date().timeIntervalSince1970) {
-    do {
-        try store.write(updated)
-    } catch {
-        log("failed to write session \(event.sessionId): \(error)")
+        if let updated = Transition.apply(event, to: current, pid: pid, now: Date().timeIntervalSince1970) {
+            try store.write(updated)
+        } else {
+            store.delete(sessionId: event.sessionId)
+        }
     }
-} else {
-    store.delete(sessionId: event.sessionId)
+} catch {
+    log("failed to update session \(event.sessionId): \(error)")
 }
 exit(0)

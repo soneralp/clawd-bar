@@ -30,11 +30,17 @@ public enum HooksConfig {
     ]
 
     public static func install(into settings: [String: Any], command: String) -> [String: Any] {
-        var hooks = removingCommand(command, from: hookTable(settings))
+        var hooks = removingCommand(command, from: rawHooks(settings))
         for registration in events {
             var entry: [String: Any] = ["hooks": [["type": "command", "command": command]]]
             entry["matcher"] = registration.matcher
-            hooks[registration.event, default: []].append(entry)
+            if var entries = hooks[registration.event] as? [Any] {
+                entries.append(entry)
+                hooks[registration.event] = entries
+            } else if hooks[registration.event] == nil {
+                hooks[registration.event] = [entry]
+            }
+            // Any other value is left alone: we never overwrite something we don't understand.
         }
         var result = settings
         result["hooks"] = hooks
@@ -42,8 +48,9 @@ public enum HooksConfig {
     }
 
     public static func remove(from settings: [String: Any], command: String) -> [String: Any] {
-        let hooks = removingCommand(command, from: hookTable(settings))
         var result = settings
+        guard settings["hooks"] is [String: Any] else { return result }
+        let hooks = removingCommand(command, from: rawHooks(settings))
         result["hooks"] = hooks.isEmpty ? nil : hooks
         return result
     }
@@ -58,29 +65,33 @@ public enum HooksConfig {
 
     // MARK: - Private
 
-    /// The `hooks` table with malformed values dropped.
+    private static func rawHooks(_ settings: [String: Any]) -> [String: Any] {
+        settings["hooks"] as? [String: Any] ?? [:]
+    }
+
+    /// The `hooks` table as typed entries, for reading only.
     private static func hookTable(_ settings: [String: Any]) -> [String: [[String: Any]]] {
-        guard let raw = settings["hooks"] as? [String: Any] else { return [:] }
-        return raw.compactMapValues { value in
-            guard let entries = value as? [Any] else { return nil }
-            return entries.compactMap { $0 as? [String: Any] }
+        rawHooks(settings).compactMapValues { value in
+            (value as? [Any])?.compactMap { $0 as? [String: Any] }
         }
     }
 
-    private static func removingCommand(
-        _ command: String,
-        from hooks: [String: [[String: Any]]]
-    ) -> [String: [[String: Any]]] {
-        hooks.compactMapValues { entries in
-            let kept = entries.compactMap { entry -> [String: Any]? in
-                guard let handlers = entry["hooks"] as? [[String: Any]] else { return entry }
-                let remaining = handlers.filter { $0["command"] as? String != command }
+    /// Removes our handlers and passes every value we don't recognize through untouched.
+    private static func removingCommand(_ command: String, from hooks: [String: Any]) -> [String: Any] {
+        hooks.compactMapValues { value -> Any? in
+            guard let entries = value as? [Any] else { return value }
+            let kept = entries.compactMap { element -> Any? in
+                guard let entry = element as? [String: Any],
+                      let handlers = entry["hooks"] as? [Any]
+                else { return element }
+                let remaining = handlers.filter { ($0 as? [String: Any])?["command"] as? String != command }
+                if remaining.count == handlers.count { return entry }
                 if remaining.isEmpty { return nil }
                 var updated = entry
                 updated["hooks"] = remaining
                 return updated
             }
-            return kept.isEmpty ? nil : kept
+            return kept.isEmpty && !entries.isEmpty ? nil : kept
         }
     }
 

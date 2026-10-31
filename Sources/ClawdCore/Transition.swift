@@ -9,7 +9,8 @@ public enum Transition {
     /// (the session ended).
     ///
     /// - Parameters:
-    ///   - pid: PID of the owning Claude Code process; only used when creating a record.
+    ///   - pid: PID of the owning Claude Code process. The caller decides
+    ///     whether to reuse the stored PID or detect it again.
     ///   - now: Current Unix time in seconds.
     public static func apply(
         _ event: HookEvent,
@@ -26,6 +27,7 @@ public enum Transition {
             state: .running, detail: "Working", subagents: 0,
             stateSince: now, updatedAt: now
         )
+        record.pid = pid
         if !event.cwd.isEmpty, event.cwd != record.cwd {
             record.cwd = event.cwd
             record.project = projectName(fromCwd: event.cwd, home: home)
@@ -34,10 +36,21 @@ public enum Transition {
 
         switch event.name {
         case "SessionStart":
-            record.state = .running
-            record.detail = "Started"
+            // A new, resumed or cleared session sits at the prompt until the
+            // user types. Compaction can happen mid-turn, so it keeps its state.
+            if event.source != "compact" || current == nil {
+                record.state = .done
+                record.detail = "Ready"
+                record.subagents = 0
+            }
 
-        case "UserPromptSubmit", "PostToolUse", "PostToolUseFailure":
+        case "UserPromptSubmit":
+            record.state = .running
+            record.detail = "Working"
+            // An interrupted turn never sends SubagentStop or Stop.
+            record.subagents = 0
+
+        case "PostToolUse", "PostToolUseFailure":
             record.state = .running
             record.detail = "Working"
 

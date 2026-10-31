@@ -7,6 +7,9 @@ public enum ProcessTree {
     /// installer ships a `claude` binary; npm installs run under `node`.
     public static let claudeProcessNames: Set<String> = ["claude", "node"]
 
+    /// Short-lived shells that Claude Code uses to launch hook commands.
+    static let shellNames: Set<String> = ["sh", "bash", "zsh", "dash", "fish"]
+
     /// How far up the tree `claudePID()` looks. Hooks run under `sh -c`, so the
     /// Claude process is normally the grandparent.
     static let maxAncestorDepth = 6
@@ -42,10 +45,18 @@ public enum ProcessTree {
         return nil
     }
 
-    /// The PID of the Claude Code process running this hook, falling back to
-    /// the direct parent when no recognizable ancestor is found.
+    /// The PID of the Claude Code process running this hook. When no ancestor
+    /// has a known name, falls back to the nearest ancestor that is not a
+    /// shell, because the shell that ran the hook exits right after it.
     public static func claudePID() -> Int32 {
-        findAncestor(startingAt: getpid(), named: claudeProcessNames) ?? getppid()
+        if let pid = findAncestor(startingAt: getpid(), named: claudeProcessNames) { return pid }
+        var current = getpid()
+        for _ in 0..<maxAncestorDepth {
+            guard let parent = parentPID(of: current), parent > 1 else { break }
+            if let name = processName(of: parent), !shellNames.contains(name) { return parent }
+            current = parent
+        }
+        return getppid()
     }
 
     // MARK: - Private

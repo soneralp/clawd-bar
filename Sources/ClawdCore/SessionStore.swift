@@ -9,6 +9,7 @@ public struct SessionStore: Sendable {
     public enum StoreError: Error, Equatable {
         case invalidSessionId(String)
         case renameFailed(errno: Int32)
+        case lockFailed(errno: Int32)
     }
 
     /// `~/.claude/clawd-bar/sessions`
@@ -31,7 +32,8 @@ public struct SessionStore: Sendable {
         let target = try fileURL(for: record.sessionId)
         try ensureDirectory()
         let data = try Self.encoder.encode(record)
-        let temporary = target.appendingPathExtension("tmp")
+        // A unique name per writer, so concurrent hooks never share a temp file.
+        let temporary = directory.appendingPathComponent(".\(record.sessionId).\(UUID().uuidString).tmp")
         try data.write(to: temporary)
         // rename(2) atomically replaces an existing target, unlike FileManager.moveItem.
         if rename(temporary.path, target.path) != 0 {
@@ -39,6 +41,20 @@ public struct SessionStore: Sendable {
             try? FileManager.default.removeItem(at: temporary)
             throw StoreError.renameFailed(errno: code)
         }
+    }
+
+    /// Runs `body` while holding an exclusive `flock(2)` on the session's lock
+    /// file. Hooks for one session can fire concurrently (parallel tool calls,
+    /// subagents), and each one does read → transform → write.
+    public func withLock<T>(sessionId: String, _ body: () throws -> T) throws -> T {
+        let lockURL = try fileURL(for: sessionId).deletingPathExtension().appendingPathExtension("lock")
+        try ensureDirectory()
+        let descriptor = open(lockURL.path, O_CREAT | O_RDWR, 0o600)
+        guard descriptor >= 0 else { throw StoreError.lockFailed(errno: errno) }
+        defer { close(descriptor) }
+        guard flock(descriptor, LOCK_EX) == 0 else { throw StoreError.lockFailed(errno: errno) }
+        defer { flock(descriptor, LOCK_UN) }
+        return try body()
     }
 
     public func read(sessionId: String) -> SessionRecord? {
@@ -49,6 +65,7 @@ public struct SessionStore: Sendable {
     public func delete(sessionId: String) {
         guard let url = try? fileURL(for: sessionId) else { return }
         try? FileManager.default.removeItem(at: url)
+        try? FileManager.default.removeItem(at: url.deletingPathExtension().appendingPathExtension("lock"))
     }
 
     /// All readable records, sorted by session id. Unreadable files are skipped.

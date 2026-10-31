@@ -21,20 +21,20 @@ long. Clicking a row brings Warp to the front.
 ## Requirements
 
 - macOS 14 Sonoma or later
-- Xcode 15+ command line tools (Swift 5.10+) to build
+- Xcode 15.3 or later (Swift 5.10+) to build
 - Claude Code with hooks support
 
 ## Install
 
 ```sh
-git clone https://github.com/<you>/clawd-bar.git
+git clone <repository-url> clawd-bar
 cd clawd-bar
 make install          # builds, copies to /Applications and launches
 ```
 
-Then click the icon and choose **Install Claude Code Hooks…**. Sessions you
-start after that show up in the menu bar. Sessions that were already running
-appear once they fire their next event.
+Then click the icon and choose **Install Claude Code Hooks…**. Claude Code
+reads hooks when a session starts, so restart any sessions that are already
+running.
 
 Optional toggles in the menu:
 
@@ -54,15 +54,18 @@ Claude Code ──hook event (JSON on stdin)──▶ clawd-hook ──writes─
   Code runs it for a dozen [hook events](https://code.claude.com/docs/en/hooks)
   such as `UserPromptSubmit`, `PermissionRequest`, `Notification`, `Stop`, and
   `SessionEnd`. It maps each event to a state and atomically writes one JSON
-  file per session. It never prints to stdout and always exits 0, so it can
-  never block or alter a Claude session.
+  file per session, under a per-session file lock. It never prints to stdout
+  and always exits 0, so it cannot change what Claude does. It does run
+  synchronously, which adds a few milliseconds per tool call.
 - **Clawd Bar** watches that directory, aggregates the files, and renders the
   icon and menu. Every 15 seconds it also drops sessions whose Claude process
   has exited without sending `SessionEnd`.
 - **Installing hooks** adds entries to `~/.claude/settings.json` that call
   `~/.claude/clawd-bar/bin/clawd-hook`, a symlink into the app bundle. Existing
-  hooks and settings are preserved, and the previous file is saved as
-  `settings.json.clawd-backup`.
+  hooks and settings are preserved, and a symlinked `settings.json` stays a
+  symlink. Before the first change, the original file is saved as
+  `settings.json.clawd-backup`. If the app is deleted without removing its
+  hooks, the hook command quietly does nothing.
 
 ## Known limitations
 
@@ -71,6 +74,9 @@ Claude Code ──hook event (JSON on stdin)──▶ clawd-hook ──writes─
 - **Yellow lingers after approval.** Claude Code does not emit an event when you
   approve a permission prompt. The icon turns orange again when that tool call
   finishes.
+- **Interrupting with Esc.** Cancelling a prompt or a running turn sends no
+  event. The session keeps its last state until your next message, or until
+  Claude Code's idle reminder for a turn that was running.
 - **Headless runs count.** `claude -p` invocations from scripts also appear,
   since hooks cannot tell interactive and headless sessions apart.
 
@@ -90,8 +96,9 @@ The code is split into three targets:
 
 ## Uninstall
 
-Choose **Remove Claude Code Hooks** from the menu, then run `make uninstall`
-and delete `~/.claude/clawd-bar`.
+Choose **Remove Claude Code Hooks** from the menu, quit the app, then run
+`make uninstall` and delete `~/.claude/clawd-bar`. Running sessions keep
+their old hook configuration until they restart.
 
 ## License
 

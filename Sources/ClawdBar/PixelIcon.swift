@@ -4,8 +4,9 @@ import ClawdCore
 /// Draws the 8×8 pixel-art Clawd mascot. The whole body takes the state's
 /// color; only the eyes stay dark.
 enum PixelIcon {
-    /// Point size of the status item image.
-    static let size: CGFloat = 18
+    /// Point size of the status item image: exactly 2 pt per pixel, so every
+    /// pixel lands on whole device pixels and stays crisp.
+    static let size: CGFloat = 16
 
     /// `o` body, `d` eye, anything else transparent.
     private static let awake = [
@@ -43,6 +44,7 @@ enum PixelIcon {
 
     private static func render(rows: [String], body: NSColor) -> NSImage {
         let image = NSImage(size: NSSize(width: size, height: size), flipped: true) { rect in
+            NSGraphicsContext.current?.shouldAntialias = false
             let pixel = rect.width / CGFloat(rows.count)
             for (y, row) in rows.enumerated() {
                 for (x, character) in row.enumerated() {

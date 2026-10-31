@@ -7,21 +7,25 @@ enum HooksInstaller {
     enum InstallError: LocalizedError {
         case hookBinaryMissing(URL)
         case settingsUnreadable(URL, underlying: Error)
+        case settingsNotJSONObject(URL)
 
         var errorDescription: String? {
             switch self {
             case .hookBinaryMissing(let url):
                 "The clawd-hook binary was not found next to the app at \(url.path)."
             case .settingsUnreadable(let url, let underlying):
-                "\(url.path) is not valid JSON, so it was left untouched. \(underlying.localizedDescription)"
+                "\(url.path) could not be read, so it was left untouched. \(underlying.localizedDescription)"
+            case .settingsNotJSONObject(let url):
+                "\(url.path) does not contain a JSON object, so it was left untouched."
             }
         }
     }
 
     /// The command written into settings.json. Claude Code runs hook commands
-    /// through a shell, which expands `~`. Using the symlink keeps settings.json
-    /// valid if the app is moved and reinstalled.
-    static let hookCommand = "~/.claude/clawd-bar/bin/clawd-hook"
+    /// through a shell. The guard makes the hook a silent no-op if Clawd Bar is
+    /// deleted without removing its hooks, instead of an error on every event.
+    static let hookCommand =
+        #"f="$HOME/.claude/clawd-bar/bin/clawd-hook"; [ -x "$f" ] && exec "$f"; exit 0"#
 
     private static var claudeDirectory: URL {
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude", isDirectory: true)
@@ -41,15 +45,16 @@ enum HooksInstaller {
     }
 
     static func install() throws {
-        try linkHookBinary()
         let settings = try readSettings()
+        try linkHookBinary()
         try writeSettings(HooksConfig.install(into: settings, command: hookCommand))
     }
 
+    /// Removes the settings entries. The symlink stays, because sessions that
+    /// are already running keep calling the hook until they restart.
     static func remove() throws {
         let settings = try readSettings()
         try writeSettings(HooksConfig.remove(from: settings, command: hookCommand))
-        try? FileManager.default.removeItem(at: symlinkURL)
     }
 
     // MARK: - Private
@@ -65,31 +70,50 @@ enum HooksInstaller {
         try fileManager.createSymbolicLink(at: symlinkURL, withDestinationURL: target)
     }
 
+    /// The real file behind settings.json, so dotfile-managed symlinks survive.
+    private static var resolvedSettingsURL: URL {
+        settingsURL.resolvingSymlinksInPath()
+    }
+
     /// An empty dictionary when the file does not exist yet; throws when it
     /// exists but cannot be parsed, so we never clobber a hand-edited file.
     private static func readSettings() throws -> [String: Any] {
-        guard FileManager.default.fileExists(atPath: settingsURL.path) else { return [:] }
+        let url = resolvedSettingsURL
+        guard FileManager.default.fileExists(atPath: url.path) else { return [:] }
+        let data: Data
+        let object: Any
         do {
-            let data = try Data(contentsOf: settingsURL)
-            guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                throw CocoaError(.propertyListReadCorrupt)
-            }
-            return object
+            data = try Data(contentsOf: url)
+            object = try JSONSerialization.jsonObject(with: data)
         } catch {
-            throw InstallError.settingsUnreadable(settingsURL, underlying: error)
+            throw InstallError.settingsUnreadable(url, underlying: error)
         }
+        guard let settings = object as? [String: Any] else { throw InstallError.settingsNotJSONObject(url) }
+        return settings
     }
 
     private static func writeSettings(_ settings: [String: Any]) throws {
         let fileManager = FileManager.default
-        try fileManager.createDirectory(at: claudeDirectory, withIntermediateDirectories: true)
-        if fileManager.fileExists(atPath: settingsURL.path) {
-            try? fileManager.removeItem(at: backupURL)
-            try fileManager.copyItem(at: settingsURL, to: backupURL)
+        let url = resolvedSettingsURL
+        try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+
+        var attributes: [FileAttributeKey: Any] = [:]
+        if fileManager.fileExists(atPath: url.path) {
+            // Keep the very first backup: it is the user's file before Clawd Bar ever touched it.
+            if !fileManager.fileExists(atPath: backupURL.path) {
+                try fileManager.copyItem(at: url, to: backupURL)
+            }
+            if let permissions = try? fileManager.attributesOfItem(atPath: url.path)[.posixPermissions] {
+                attributes[.posixPermissions] = permissions
+            }
         }
+
         let data = try JSONSerialization.data(
             withJSONObject: settings, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         )
-        try data.write(to: settingsURL, options: .atomic)
+        try data.write(to: url, options: .atomic)
+        if !attributes.isEmpty {
+            try? fileManager.setAttributes(attributes, ofItemAtPath: url.path)
+        }
     }
 }

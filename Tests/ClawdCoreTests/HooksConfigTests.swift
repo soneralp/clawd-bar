@@ -67,9 +67,30 @@ final class HooksConfigTests: XCTestCase {
         XCTAssertFalse(HooksConfig.isInstalled(partial, command: command))
     }
 
-    func testIgnoresMalformedHookEntries() {
-        let malformed: [String: Any] = ["hooks": ["Stop": "oops", "SessionEnd": [42]]]
-        let result = HooksConfig.install(into: malformed, command: command)
-        XCTAssertTrue(HooksConfig.isInstalled(result, command: command))
+    func testMalformedValuesArePassedThroughUntouched() {
+        let malformed: [String: Any] = ["hooks": ["Stop": "oops", "SessionEnd": [42], "Custom": ["x": 1]]]
+        let installed = HooksConfig.install(into: malformed, command: command)
+        let table = installed["hooks"] as? [String: Any] ?? [:]
+        XCTAssertEqual(table["Stop"] as? String, "oops")
+        XCTAssertEqual((table["SessionEnd"] as? [Any])?.first as? Int, 42)
+        XCTAssertEqual((table["SessionEnd"] as? [Any])?.count, 2)
+        XCTAssertNotNil(table["Custom"])
+
+        let removed = HooksConfig.remove(from: installed, command: command)
+        let after = removed["hooks"] as? [String: Any] ?? [:]
+        XCTAssertEqual(after["Stop"] as? String, "oops")
+        XCTAssertEqual((after["SessionEnd"] as? [Any])?.count, 1)
+        XCTAssertNotNil(after["Custom"])
+    }
+
+    func testRemoveLeavesNonDictionaryHooksAlone() {
+        let odd: [String: Any] = ["hooks": "nonsense"]
+        XCTAssertEqual(HooksConfig.remove(from: odd, command: command)["hooks"] as? String, "nonsense")
+    }
+
+    func testPreservesEmptyEventArraysWeDidNotTouch() {
+        let settings: [String: Any] = ["hooks": ["Custom": [Any]()]]
+        let removed = HooksConfig.remove(from: settings, command: command)
+        XCTAssertNotNil((removed["hooks"] as? [String: Any])?["Custom"])
     }
 }

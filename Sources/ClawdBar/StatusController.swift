@@ -18,6 +18,10 @@ final class StatusController: NSObject, NSMenuDelegate {
     private var refreshTimer: Timer?
     private var pulseTimer: Timer?
     private var aggregate = Aggregate(records: [], now: 0)
+    /// Reading settings.json on every refresh would be wasteful; it only
+    /// changes when the user toggles it or edits the file by hand.
+    private var hooksInstalled = false
+    private var isMenuOpen = false
 
     init(store: SessionStore) {
         self.store = store
@@ -35,6 +39,7 @@ final class StatusController: NSObject, NSMenuDelegate {
         statusItem.menu = menu
         statusItem.button?.imagePosition = .imageLeading
 
+        hooksInstalled = HooksInstaller.isInstalled()
         watcher.start()
         refreshTimer = scheduledTimer(interval: Self.refreshInterval) { [weak self] in self?.refresh() }
         refresh()
@@ -51,8 +56,17 @@ final class StatusController: NSObject, NSMenuDelegate {
 
     // MARK: - NSMenuDelegate
 
-    func menuWillOpen(_ menu: NSMenu) {
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        hooksInstalled = HooksInstaller.isInstalled()
         refresh()
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        isMenuOpen = true
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        isMenuOpen = false
     }
 
     // MARK: - Rendering
@@ -63,13 +77,14 @@ final class StatusController: NSObject, NSMenuDelegate {
         button.title = aggregate.title.isEmpty ? "" : " \(aggregate.title)"
         button.toolTip = tooltip()
         updatePulse()
-        rebuildMenu()
+        // Rebuilding while the menu is tracking would destroy the row under the cursor.
+        if !isMenuOpen { rebuildMenu() }
     }
 
     private func tooltip() -> String {
         switch aggregate.icon {
         case .idle: "No Claude Code sessions"
-        case .waiting: "\(aggregate.title) is waiting for you"
+        case .waiting: "Waiting for you: \(aggregate.title)"
         case .running: "Claude is working"
         case .done: "All sessions finished"
         }
@@ -109,7 +124,6 @@ final class StatusController: NSObject, NSMenuDelegate {
         menu.addItem(toggleItem("Launch at Login", isOn: Settings.launchAtLogin, action: #selector(toggleLaunchAtLogin)))
 
         menu.addItem(.separator())
-        let hooksInstalled = HooksInstaller.isInstalled()
         let hooksItem = actionItem(
             hooksInstalled ? "Remove Claude Code Hooks" : "Install Claude Code Hooks…",
             action: #selector(toggleHooks)
@@ -193,11 +207,21 @@ final class StatusController: NSObject, NSMenuDelegate {
         } catch {
             showError("Could not update ~/.claude/settings.json.", error)
         }
+        hooksInstalled = HooksInstaller.isInstalled()
+        if hooksInstalled { showRestartHint() }
         rebuildMenu()
     }
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    private func showRestartHint() {
+        let alert = NSAlert()
+        alert.messageText = "Hooks installed"
+        alert.informativeText = "Claude Code reads hooks when a session starts. Restart running sessions to see them in the menu bar."
+        NSApp.activate()
+        alert.runModal()
     }
 
     private func showError(_ message: String, _ error: Error) {

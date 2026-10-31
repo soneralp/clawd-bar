@@ -12,6 +12,8 @@ public struct HookEvent: Equatable, Sendable {
     public var notificationType: String?
     public var lastAssistantMessage: String?
     public var errorType: String?
+    /// `SessionStart` only: `startup`, `resume`, `clear`, `compact` or `fork`.
+    public var source: String?
 
     public init(
         name: String,
@@ -20,7 +22,8 @@ public struct HookEvent: Equatable, Sendable {
         toolName: String? = nil,
         notificationType: String? = nil,
         lastAssistantMessage: String? = nil,
-        errorType: String? = nil
+        errorType: String? = nil,
+        source: String? = nil
     ) {
         self.name = name
         self.sessionId = sessionId
@@ -29,6 +32,7 @@ public struct HookEvent: Equatable, Sendable {
         self.notificationType = notificationType
         self.lastAssistantMessage = lastAssistantMessage
         self.errorType = errorType
+        self.source = source
     }
 
     /// Returns `nil` when the payload is not a JSON object or lacks
@@ -46,7 +50,8 @@ public struct HookEvent: Equatable, Sendable {
             toolName: object["tool_name"] as? String,
             notificationType: object["notification_type"] as? String,
             lastAssistantMessage: object["last_assistant_message"] as? String,
-            errorType: object["error_type"] as? String
+            errorType: object["error_type"] as? String,
+            source: object["source"] as? String
         )
     }
 }

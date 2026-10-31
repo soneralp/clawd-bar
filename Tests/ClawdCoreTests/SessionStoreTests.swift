@@ -64,6 +64,27 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertNil(store.read(sessionId: "../evil"))
     }
 
+    func testDeleteAlsoRemovesLockFile() throws {
+        try store.withLock(sessionId: "abc") { try store.write(makeRecord()) }
+        store.delete(sessionId: "abc")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("abc.lock").path))
+    }
+
+    func testConcurrentLockedIncrementsAreNotLost() throws {
+        try store.write(makeRecord())
+        let iterations = 200
+        DispatchQueue.concurrentPerform(iterations: iterations) { _ in
+            try? store.withLock(sessionId: "abc") {
+                var record = store.read(sessionId: "abc")!
+                record.subagents += 1
+                try store.write(record)
+            }
+        }
+        XCTAssertEqual(store.read(sessionId: "abc")?.subagents, 2 + iterations)
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasSuffix(".tmp") }
+        XCTAssertEqual(leftovers, [])
+    }
+
     func testPruneRemovesDeadPIDs() throws {
         try store.write(makeRecord(id: "alive", pid: 1))
         try store.write(makeRecord(id: "dead", pid: 2))
