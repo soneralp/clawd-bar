@@ -19,6 +19,9 @@ public struct SessionRow: Equatable, Sendable {
 /// Everything the menu bar UI needs, derived from the current set of records.
 public struct Aggregate: Equatable, Sendable {
     public var icon: IconState
+    /// True while at least one session is working, even if another one is
+    /// waiting and the icon shows yellow. Drives the working animation.
+    public var isAnyRunning: Bool
     /// Empty unless a session is waiting; then the longest-waiting session's
     /// name, plus `+N` for the others.
     public var title: String
@@ -39,6 +42,7 @@ public struct Aggregate: Equatable, Sendable {
         let running = Self.sorted(records, in: .running, by: \.updatedAt, newestFirst: true)
         let done = Self.sorted(records, in: .done, by: \.stateSince, newestFirst: true)
 
+        isAnyRunning = !running.isEmpty
         active = (waiting + running).map(row)
         finished = done.map(row)
 

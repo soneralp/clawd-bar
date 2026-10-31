@@ -9,11 +9,14 @@ for you, or done, so you can stop switching back to the terminal to check.
 | Icon | Meaning |
 |------|---------|
 | Gray, eyes closed | No Claude Code sessions are running |
-| Orange, pulsing | At least one session is working |
+| Orange | At least one session is working |
 | Yellow, with project name | A session needs you: a permission prompt, a question, or an input dialog |
 | Green | Every session has finished its turn |
 
-The most urgent state wins. When a session is waiting, its project name
+The most urgent state sets the color. Whenever at least one session is
+working, Clawd hops in place, even while another session is waiting for you:
+
+![Clawd hopping while a session works](docs/images/working.gif) When a session is waiting, its project name
 appears next to the icon (`my-app +1` if more than one is waiting).
 Click the icon for a per-session list with what each one is doing and for how
 long. Clicking a row brings Warp to the front.

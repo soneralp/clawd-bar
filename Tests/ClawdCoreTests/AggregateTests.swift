@@ -43,6 +43,16 @@ final class AggregateTests: XCTestCase {
         XCTAssertEqual(Aggregate(records: records, now: now).icon, .waiting)
     }
 
+    func testIsAnyRunning() {
+        XCTAssertFalse(Aggregate(records: [], now: now).isAnyRunning)
+        XCTAssertFalse(Aggregate(records: [record("a", .done), record("b", .waiting)], now: now).isAnyRunning)
+        XCTAssertTrue(Aggregate(records: [record("a", .running)], now: now).isAnyRunning)
+        // Keeps animating while another session waits; the icon is yellow then.
+        let mixed = Aggregate(records: [record("a", .running), record("b", .waiting)], now: now)
+        XCTAssertTrue(mixed.isAnyRunning)
+        XCTAssertEqual(mixed.icon, .waiting)
+    }
+
     func testTitleIsEmptyWithoutWaiting() {
         XCTAssertEqual(Aggregate(records: [record("a", .running), record("b", .done)], now: now).title, "")
     }

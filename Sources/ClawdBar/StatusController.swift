@@ -6,9 +6,8 @@ import ClawdCore
 final class StatusController: NSObject, NSMenuDelegate {
     /// How often dead sessions are pruned and elapsed times refreshed.
     static let refreshInterval: TimeInterval = 15
-    /// Half-period of the "running" pulse.
-    static let pulseInterval: TimeInterval = 0.6
-    static let pulseDimAlpha: CGFloat = 0.35
+    /// Duration of one frame of the working animation.
+    static let animationFrameInterval: TimeInterval = 0.2
 
     private let store: SessionStore
     private let notifier = Notifier()
@@ -16,7 +15,8 @@ final class StatusController: NSObject, NSMenuDelegate {
     private let menu = NSMenu()
     private lazy var watcher = DirectoryWatcher(url: store.directory) { [weak self] in self?.refresh() }
     private var refreshTimer: Timer?
-    private var pulseTimer: Timer?
+    private var animationTimer: Timer?
+    private var animationFrame = 0
     private var aggregate = Aggregate(records: [], now: 0)
     /// Reading settings.json on every refresh would be wasteful; it only
     /// changes when the user toggles it or edits the file by hand.
@@ -73,10 +73,9 @@ final class StatusController: NSObject, NSMenuDelegate {
 
     private func render() {
         guard let button = statusItem.button else { return }
-        button.image = PixelIcon.image(for: aggregate.icon)
         button.title = aggregate.title.isEmpty ? "" : " \(aggregate.title)"
         button.toolTip = tooltip()
-        updatePulse()
+        updateAnimation()
         // Rebuilding while the menu is tracking would destroy the row under the cursor.
         if !isMenuOpen { rebuildMenu() }
     }
@@ -90,18 +89,26 @@ final class StatusController: NSObject, NSMenuDelegate {
         }
     }
 
-    private func updatePulse() {
-        guard aggregate.icon == .running else {
-            pulseTimer?.invalidate()
-            pulseTimer = nil
-            statusItem.button?.alphaValue = 1
+    /// Clawd hops while any session is working, in the color of the most
+    /// urgent state; otherwise it stands still.
+    private func updateAnimation() {
+        guard aggregate.isAnyRunning else {
+            animationTimer?.invalidate()
+            animationTimer = nil
+            statusItem.button?.image = PixelIcon.image(for: aggregate.icon)
             return
         }
-        guard pulseTimer == nil else { return }
-        pulseTimer = scheduledTimer(interval: Self.pulseInterval) { [weak self] in
-            guard let button = self?.statusItem.button else { return }
-            button.alphaValue = button.alphaValue < 1 ? 1 : Self.pulseDimAlpha
+        showAnimationFrame()
+        guard animationTimer == nil else { return }
+        animationTimer = scheduledTimer(interval: Self.animationFrameInterval) { [weak self] in
+            guard let self else { return }
+            self.animationFrame = (self.animationFrame + 1) % PixelIcon.workingFrameCount
+            self.showAnimationFrame()
         }
+    }
+
+    private func showAnimationFrame() {
+        statusItem.button?.image = PixelIcon.workingImage(for: aggregate.icon, frame: animationFrame)
     }
 
     private func rebuildMenu() {
