@@ -29,7 +29,10 @@ do {
             pid = ProcessTree.claudePID()
         }
 
-        if let updated = Transition.apply(event, to: current, pid: pid, now: Date().timeIntervalSince1970) {
+        if var updated = Transition.apply(event, to: current, pid: pid, now: Date().timeIntervalSince1970) {
+            if let path = event.transcriptPath, !path.isEmpty {
+                updated.applyTitles(TranscriptTitles.read(from: URL(fileURLWithPath: path)))
+            }
             try store.write(updated)
         } else {
             store.delete(sessionId: event.sessionId)

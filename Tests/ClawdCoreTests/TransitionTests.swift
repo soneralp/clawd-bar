@@ -223,6 +223,20 @@ final class TransitionTests: XCTestCase {
         XCTAssertNil(HookEvent(jsonData: data))
     }
 
+    func testHookEventReadsTranscriptPath() {
+        let data = Data(#"{"hook_event_name":"Stop","session_id":"s","transcript_path":"/t/s.jsonl"}"#.utf8)
+        XCTAssertEqual(HookEvent(jsonData: data)?.transcriptPath, "/t/s.jsonl")
+    }
+
+    func testTitlesOnlyOverwriteWhenFound() {
+        var record = current(.running)
+        record.customTitle = "Mine"
+        record.aiTitle = "Old AI"
+        record.applyTitles(TranscriptTitles.Titles(custom: nil, ai: "New AI"))
+        XCTAssertEqual(record.customTitle, "Mine")
+        XCTAssertEqual(record.aiTitle, "New AI")
+    }
+
     func testHookEventReturnsNilForGarbage() {
         XCTAssertNil(HookEvent(jsonData: Data("not json".utf8)))
         XCTAssertNil(HookEvent(jsonData: Data("[1,2]".utf8)))

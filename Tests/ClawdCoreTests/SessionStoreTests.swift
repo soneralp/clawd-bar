@@ -53,6 +53,18 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertEqual(store.loadAll(), [])
     }
 
+    func testDecodesRecordsWrittenBeforeTitlesExisted() throws {
+        try store.ensureDirectory()
+        let legacy = """
+        {"session_id":"old","pid":1,"cwd":"/p","project":"p","state":"done","detail":"Done",
+         "subagents":0,"state_since":1,"updated_at":1}
+        """
+        try legacy.write(to: directory.appendingPathComponent("old.json"), atomically: true, encoding: .utf8)
+        let record = try XCTUnwrap(store.read(sessionId: "old"))
+        XCTAssertNil(record.customTitle)
+        XCTAssertNil(record.aiTitle)
+    }
+
     func testDeleteRemovesFile() throws {
         try store.write(makeRecord())
         store.delete(sessionId: "abc")

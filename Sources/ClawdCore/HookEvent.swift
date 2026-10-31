@@ -8,6 +8,7 @@ public struct HookEvent: Equatable, Sendable {
     public var name: String
     public var sessionId: String
     public var cwd: String
+    public var transcriptPath: String?
     public var toolName: String?
     public var notificationType: String?
     public var lastAssistantMessage: String?
@@ -19,6 +20,7 @@ public struct HookEvent: Equatable, Sendable {
         name: String,
         sessionId: String,
         cwd: String,
+        transcriptPath: String? = nil,
         toolName: String? = nil,
         notificationType: String? = nil,
         lastAssistantMessage: String? = nil,
@@ -28,6 +30,7 @@ public struct HookEvent: Equatable, Sendable {
         self.name = name
         self.sessionId = sessionId
         self.cwd = cwd
+        self.transcriptPath = transcriptPath
         self.toolName = toolName
         self.notificationType = notificationType
         self.lastAssistantMessage = lastAssistantMessage
@@ -47,6 +50,7 @@ public struct HookEvent: Equatable, Sendable {
             name: name,
             sessionId: sessionId,
             cwd: object["cwd"] as? String ?? "",
+            transcriptPath: object["transcript_path"] as? String,
             toolName: object["tool_name"] as? String,
             notificationType: object["notification_type"] as? String,
             lastAssistantMessage: object["last_assistant_message"] as? String,

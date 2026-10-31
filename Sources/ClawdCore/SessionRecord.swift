@@ -26,6 +26,13 @@ public struct SessionRecord: Codable, Equatable, Sendable {
     public var stateSince: TimeInterval
     /// When any hook event last touched this record (Unix time, seconds).
     public var updatedAt: TimeInterval
+    /// The name given with `/rename`, if any.
+    public var customTitle: String?
+    /// The title Claude Code generated for the conversation, if any.
+    public var aiTitle: String?
+
+    /// The session's name: the user's own title first, then the generated one.
+    public var title: String? { customTitle ?? aiTitle }
 
     public init(
         sessionId: String,
@@ -36,7 +43,9 @@ public struct SessionRecord: Codable, Equatable, Sendable {
         detail: String,
         subagents: Int,
         stateSince: TimeInterval,
-        updatedAt: TimeInterval
+        updatedAt: TimeInterval,
+        customTitle: String? = nil,
+        aiTitle: String? = nil
     ) {
         self.sessionId = sessionId
         self.pid = pid
@@ -47,5 +56,7 @@ public struct SessionRecord: Codable, Equatable, Sendable {
         self.subagents = subagents
         self.stateSince = stateSince
         self.updatedAt = updatedAt
+        self.customTitle = customTitle
+        self.aiTitle = aiTitle
     }
 }

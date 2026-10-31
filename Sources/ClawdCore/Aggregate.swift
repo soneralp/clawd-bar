@@ -8,11 +8,14 @@ public enum IconState: Equatable, Sendable {
 /// One row in the dropdown menu.
 public struct SessionRow: Equatable, Sendable {
     public var sessionId: String
-    /// The project name, disambiguated with a short session id when several
-    /// sessions share a project.
+    /// The session's title, or the project name (disambiguated with a short
+    /// session id when several untitled sessions share a project).
     public var displayName: String
     public var state: SessionState
     public var detail: String
+    /// The second line of the row: `"project · detail"` for titled sessions,
+    /// otherwise just the detail.
+    public var subtitle: String
     public var timeText: String
 }
 
@@ -52,7 +55,8 @@ public struct Aggregate: Equatable, Sendable {
         else { icon = .idle }
 
         if let first = waiting.first {
-            let name = row(first).displayName
+            // The menu bar stays short: always the project, never a long title.
+            let name = Self.projectLabel(first, isDuplicate: projectCounts[first.project, default: 0] > 1)
             title = waiting.count > 1 ? "\(name) +\(waiting.count - 1)" : name
         } else {
             title = ""
@@ -75,9 +79,8 @@ public struct Aggregate: Equatable, Sendable {
     }
 
     private static func makeRow(_ record: SessionRecord, isDuplicate: Bool, now: TimeInterval) -> SessionRow {
-        let name = isDuplicate
-            ? "\(record.project) · \(record.sessionId.prefix(shortIdLength))"
-            : record.project
+        let project = projectLabel(record, isDuplicate: isDuplicate)
+        let name = record.title ?? project
 
         var detail = record.detail
         if record.state == .running, record.subagents > 0 {
@@ -89,7 +92,13 @@ public struct Aggregate: Equatable, Sendable {
             ? DurationFormatter.ago(elapsed)
             : DurationFormatter.elapsed(elapsed)
 
-        return SessionRow(sessionId: record.sessionId, displayName: name,
-                          state: record.state, detail: detail, timeText: timeText)
+        let subtitle = record.title == nil ? detail : "\(record.project) · \(detail)"
+
+        return SessionRow(sessionId: record.sessionId, displayName: name, state: record.state,
+                          detail: detail, subtitle: subtitle, timeText: timeText)
+    }
+
+    private static func projectLabel(_ record: SessionRecord, isDuplicate: Bool) -> String {
+        isDuplicate ? "\(record.project) · \(record.sessionId.prefix(shortIdLength))" : record.project
     }
 }

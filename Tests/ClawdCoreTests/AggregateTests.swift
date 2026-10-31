@@ -11,11 +11,48 @@ final class AggregateTests: XCTestCase {
         detail: String = "detail",
         subagents: Int = 0,
         since: TimeInterval = 9_000,
-        updated: TimeInterval? = nil
+        updated: TimeInterval? = nil,
+        customTitle: String? = nil,
+        aiTitle: String? = nil
     ) -> SessionRecord {
         SessionRecord(sessionId: id, pid: 1, cwd: "/p/\(project ?? id)", project: project ?? id,
                       state: state, detail: detail, subagents: subagents,
-                      stateSince: since, updatedAt: updated ?? since)
+                      stateSince: since, updatedAt: updated ?? since,
+                      customTitle: customTitle, aiTitle: aiTitle)
+    }
+
+    func testCustomTitleWinsOverAITitle() {
+        let row = Aggregate(records: [record("a", .running, project: "app", detail: "Working",
+                                             customTitle: "Release prep", aiTitle: "Fix bug")], now: now).active[0]
+        XCTAssertEqual(row.displayName, "Release prep")
+        XCTAssertEqual(row.subtitle, "app · Working")
+    }
+
+    func testAITitleIsUsedWithoutCustomTitle() {
+        let row = Aggregate(records: [record("a", .running, project: "app", detail: "Working",
+                                             aiTitle: "Fix login bug")], now: now).active[0]
+        XCTAssertEqual(row.displayName, "Fix login bug")
+        XCTAssertEqual(row.subtitle, "app · Working")
+    }
+
+    func testUntitledRowFallsBackToProject() {
+        let row = Aggregate(records: [record("a", .running, project: "app", detail: "Working")], now: now).active[0]
+        XCTAssertEqual(row.displayName, "app")
+        XCTAssertEqual(row.subtitle, "Working")
+    }
+
+    func testMenuBarTitleKeepsProjectNameEvenWhenTitled() {
+        let records = [record("a", .waiting, project: "my-app", customTitle: "Weekly report")]
+        XCTAssertEqual(Aggregate(records: records, now: now).title, "my-app")
+    }
+
+    func testTitledDuplicatesDoNotGetIdSuffix() {
+        let records = [
+            record("a1b2c3", .running, project: "x", aiTitle: "Refactor"),
+            record("z9y8x7", .running, project: "x"),
+        ]
+        let names = Set(Aggregate(records: records, now: now).active.map(\.displayName))
+        XCTAssertEqual(names, ["Refactor", "x · z9y8"])
     }
 
     func testEmptyIsIdle() {

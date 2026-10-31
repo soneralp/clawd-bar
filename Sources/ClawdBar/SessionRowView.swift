@@ -4,7 +4,7 @@ import ClawdCore
 /// A two-line menu row: status dot, project name and detail, elapsed time.
 /// Clicking it brings Warp to the front.
 final class SessionRowView: NSView {
-    static let width: CGFloat = 320
+    static let width: CGFloat = 380
     static let height: CGFloat = 40
 
     private let onClick: () -> Void
@@ -17,7 +17,7 @@ final class SessionRowView: NSView {
         super.init(frame: NSRect(x: 0, y: 0, width: Self.width, height: Self.height))
         build(row)
         setAccessibilityRole(.menuItem)
-        setAccessibilityLabel("\(row.displayName), \(row.detail), \(row.timeText)")
+        setAccessibilityLabel("\(row.displayName), \(row.subtitle), \(row.timeText)")
     }
 
     @available(*, unavailable)
@@ -53,19 +53,14 @@ final class SessionRowView: NSView {
         let dot = DotView(color: Palette.color(for: row.state))
 
         let name = label(row.displayName, font: .systemFont(ofSize: 13, weight: .semibold), color: .labelColor)
-        let detail = label(row.detail, font: .systemFont(ofSize: 11), color: .secondaryLabelColor)
+        let detail = label(row.subtitle, font: .systemFont(ofSize: 11), color: .secondaryLabelColor)
         let time = label(row.timeText, font: .monospacedDigitSystemFont(ofSize: 11, weight: .regular),
                          color: .tertiaryLabelColor)
         time.alignment = .right
         time.setContentCompressionResistancePriority(.required, for: .horizontal)
         time.setContentHuggingPriority(.required, for: .horizontal)
 
-        let text = NSStackView(views: [name, detail])
-        text.orientation = .vertical
-        text.alignment = .leading
-        text.spacing = 1
-
-        for view in [dot, text, time] {
+        for view in [dot, name, detail, time] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -75,10 +70,17 @@ final class SessionRowView: NSView {
             dot.widthAnchor.constraint(equalToConstant: 10),
             dot.heightAnchor.constraint(equalToConstant: 10),
 
-            text.leadingAnchor.constraint(equalTo: dot.trailingAnchor, constant: 10),
-            text.centerYAnchor.constraint(equalTo: centerYAnchor),
-            text.trailingAnchor.constraint(lessThanOrEqualTo: time.leadingAnchor, constant: -8),
+            name.leadingAnchor.constraint(equalTo: dot.trailingAnchor, constant: 10),
+            name.bottomAnchor.constraint(equalTo: centerYAnchor, constant: 1),
+            name.trailingAnchor.constraint(lessThanOrEqualTo: time.leadingAnchor, constant: -8),
 
+            detail.leadingAnchor.constraint(equalTo: name.leadingAnchor),
+            detail.topAnchor.constraint(equalTo: centerYAnchor, constant: 1),
+            detail.trailingAnchor.constraint(lessThanOrEqualTo: time.leadingAnchor, constant: -8),
+
+            // intrinsicContentSize under-reports the drawn width by a point or
+            // two for this font, which would truncate "8m ago" to "8m a…".
+            time.widthAnchor.constraint(greaterThanOrEqualToConstant: ceil(time.fittingSize.width) + 2),
             time.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
             time.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])

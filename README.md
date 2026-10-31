@@ -19,7 +19,8 @@ working, Clawd hops in place, even while another session is waiting for you:
 ![Clawd hopping while a session works](docs/images/working.gif) When a session is waiting, its project name
 appears next to the icon (`my-app +1` if more than one is waiting).
 Click the icon for a per-session list with what each one is doing and for how
-long. Clicking a row brings Warp to the front.
+long. Each row is labeled with the session's name: the one you set with
+`/rename`, or else the title Claude Code generated for the conversation. Clicking a row brings Warp to the front.
 
 ## Requirements
 
@@ -57,7 +58,8 @@ Claude Code ──hook event (JSON on stdin)──▶ clawd-hook ──writes─
   Code runs it for a dozen [hook events](https://code.claude.com/docs/en/hooks)
   such as `UserPromptSubmit`, `PermissionRequest`, `Notification`, `Stop`, and
   `SessionEnd`. It maps each event to a state and atomically writes one JSON
-  file per session, under a per-session file lock. It never prints to stdout
+  file per session, under a per-session file lock. To pick up the session's
+  name it reads only the last 64 KB of the transcript. It never prints to stdout
   and always exits 0, so it cannot change what Claude does. It does run
   synchronously, which adds a few milliseconds per tool call.
 - **Clawd Bar** watches that directory, aggregates the files, and renders the
