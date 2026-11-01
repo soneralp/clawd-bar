@@ -2,7 +2,7 @@ import AppKit
 import ClawdCore
 
 /// Owns the status item: watches the session directory, renders the icon and
-/// title, rebuilds the dropdown menu and fires optional alerts.
+/// title, rebuilds the dropdown menu and rings per-session alarms.
 final class StatusController: NSObject, NSMenuDelegate {
     /// How often dead sessions are pruned and elapsed times refreshed.
     static let refreshInterval: TimeInterval = 15
@@ -10,7 +10,8 @@ final class StatusController: NSObject, NSMenuDelegate {
     static let animationFrameInterval: TimeInterval = 0.2
 
     private let store: SessionStore
-    private let notifier = Notifier()
+    private let chime = Chime()
+    private var alarms = Alarms(armed: Settings.armedAlarms)
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let menu = NSMenu()
     private lazy var watcher = DirectoryWatcher(url: store.directory) { [weak self] in self?.refresh() }
@@ -49,7 +50,7 @@ final class StatusController: NSObject, NSMenuDelegate {
     func refresh() {
         let records = store.prune(isAlive: ProcessTree.isAlive)
         let next = Aggregate(records: records, now: Date().timeIntervalSince1970)
-        announceTransitions(from: aggregate, to: next)
+        ringAlarms(from: aggregate, to: next)
         aggregate = next
         render()
     }
@@ -125,9 +126,6 @@ final class StatusController: NSObject, NSMenuDelegate {
         }
 
         menu.addItem(.separator())
-        menu.addItem(toggleItem("Notify When Waiting or Done", isOn: Settings.notificationsEnabled,
-                                action: #selector(toggleNotifications)))
-        menu.addItem(toggleItem("Play Sound", isOn: Settings.soundEnabled, action: #selector(toggleSound)))
         menu.addItem(toggleItem("Launch at Login", isOn: Settings.launchAtLogin, action: #selector(toggleLaunchAtLogin)))
 
         menu.addItem(.separator())
@@ -147,7 +145,12 @@ final class StatusController: NSObject, NSMenuDelegate {
 
     private func rowItem(_ row: SessionRow) -> NSMenuItem {
         let item = NSMenuItem()
-        item.view = SessionRowView(row: row, onClick: WarpLauncher.activate)
+        item.view = SessionRowView(
+            row: row,
+            isAlarmArmed: alarms.isArmed(row.sessionId),
+            onToggleAlarm: { [weak self] in self?.toggleAlarm(row.sessionId) ?? false },
+            onClick: WarpLauncher.activate
+        )
         return item
     }
 
@@ -169,31 +172,28 @@ final class StatusController: NSObject, NSMenuDelegate {
         return item
     }
 
-    // MARK: - Alerts
+    // MARK: - Alarms
 
-    /// Alerts on running → waiting and running → done, never on the first load.
-    private func announceTransitions(from previous: Aggregate, to next: Aggregate) {
-        let previousStates = Dictionary(
-            (previous.active + previous.finished).map { ($0.sessionId, $0.state) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        for row in next.active + next.finished where previousStates[row.sessionId] == .running && row.state != .running {
-            notifier.notify(row)
+    /// Chimes once per refresh if any armed session just finished or started
+    /// waiting, and forgets alarms of sessions that ended.
+    private func ringAlarms(from previous: Aggregate, to next: Aggregate) {
+        if !alarms.sessionsToRing(from: previous, to: next).isEmpty {
+            chime.play()
         }
+        // An empty snapshot may be a transient read failure; keep alarms until sessions are really gone.
+        guard !(next.active.isEmpty && next.finished.isEmpty) else { return }
+        let before = alarms
+        alarms.retainOnly(next)
+        if alarms != before { Settings.armedAlarms = alarms.armed }
+    }
+
+    private func toggleAlarm(_ sessionId: String) -> Bool {
+        alarms.toggle(sessionId)
+        Settings.armedAlarms = alarms.armed
+        return alarms.isArmed(sessionId)
     }
 
     // MARK: - Actions
-
-    @objc private func toggleNotifications() {
-        Settings.notificationsEnabled.toggle()
-        if Settings.notificationsEnabled { notifier.requestAuthorization() }
-        rebuildMenu()
-    }
-
-    @objc private func toggleSound() {
-        Settings.soundEnabled.toggle()
-        rebuildMenu()
-    }
 
     @objc private func toggleLaunchAtLogin() {
         do {

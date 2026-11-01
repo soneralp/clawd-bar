@@ -40,11 +40,12 @@ Then click the icon and choose **Install Claude Code Hooks…**. Claude Code
 reads hooks when a session starts, so restart any sessions that are already
 running.
 
-Optional toggles in the menu:
+**Alarms.** Each row has a bell. Click it to arm an alarm for that session:
+Clawd Bar plays a short chime every time the session finishes a turn or starts
+waiting for you. Click it again to turn the alarm off. Alarms are forgotten
+when the session ends. The chime follows your system output volume.
 
-- **Notify When Waiting or Done** sends a macOS notification on those transitions.
-- **Play Sound** plays a short chime on the same transitions.
-- **Launch at Login** registers the app as a login item.
+**Launch at Login** in the menu registers the app as a login item.
 
 ## How it works
 

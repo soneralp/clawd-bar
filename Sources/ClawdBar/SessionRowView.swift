@@ -1,21 +1,41 @@
 import AppKit
 import ClawdCore
 
-/// A two-line menu row: status dot, project name and detail, elapsed time.
-/// Clicking it brings Warp to the front.
+/// A two-line menu row: status dot, session name and detail, an alarm bell
+/// and the elapsed time. Clicking the bell arms or disarms the session's
+/// alarm and keeps the menu open; clicking anywhere else brings Warp forward.
 final class SessionRowView: NSView {
-    static let width: CGFloat = 380
+    static let width: CGFloat = 400
     static let height: CGFloat = 40
 
+    /// Wide enough for the longest time text ("just now", "59m ago").
+    /// Measured with the drawn width, since intrinsicContentSize under-reports
+    /// it by a point or two for this font and would truncate the text.
+    private static let timeColumnWidth: CGFloat = {
+        let field = NSTextField(labelWithString: "")
+        field.font = timeFont
+        return ["just now", "59m ago", "23h 59m", "99h ago"].map { sample in
+            field.stringValue = sample
+            return ceil(field.fittingSize.width) + 2
+        }.max() ?? 60
+    }()
+
+    private static let timeFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+
     private let onClick: () -> Void
+    private let onToggleAlarm: () -> Bool
+    private let bell = NSImageView()
     private var isHighlighted = false {
         didSet { needsDisplay = true }
     }
 
-    init(row: SessionRow, onClick: @escaping () -> Void) {
+    /// - Parameter onToggleAlarm: Flips the session's alarm and returns whether it is now armed.
+    init(row: SessionRow, isAlarmArmed: Bool, onToggleAlarm: @escaping () -> Bool, onClick: @escaping () -> Void) {
         self.onClick = onClick
+        self.onToggleAlarm = onToggleAlarm
         super.init(frame: NSRect(x: 0, y: 0, width: Self.width, height: Self.height))
         build(row)
+        showAlarm(armed: isAlarmArmed)
         setAccessibilityRole(.menuItem)
         setAccessibilityLabel("\(row.displayName), \(row.subtitle), \(row.timeText)")
     }
@@ -42,9 +62,24 @@ final class SessionRowView: NSView {
     override func mouseExited(with event: NSEvent) { isHighlighted = false }
 
     override func mouseUp(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        if bell.frame.insetBy(dx: -6, dy: -8).contains(point) {
+            showAlarm(armed: onToggleAlarm())
+            return
+        }
         isHighlighted = false
         enclosingMenuItem?.menu?.cancelTracking()
         onClick()
+    }
+
+    private func showAlarm(armed: Bool) {
+        let symbol = armed ? "bell.fill" : "bell"
+        let description = armed ? "Alarm on: chime when this session needs you" : "Alarm off"
+        bell.image = NSImage(systemSymbolName: symbol, accessibilityDescription: description)?
+            .withSymbolConfiguration(.init(pointSize: 12, weight: .medium))
+        bell.contentTintColor = armed ? Palette.waiting : .tertiaryLabelColor
+        bell.toolTip = armed ? "Alarm on. Click to turn off." : "Chime when this session finishes or needs you"
+        bell.setAccessibilityLabel(description)
     }
 
     // MARK: - Layout
@@ -54,13 +89,14 @@ final class SessionRowView: NSView {
 
         let name = label(row.displayName, font: .systemFont(ofSize: 13, weight: .semibold), color: .labelColor)
         let detail = label(row.subtitle, font: .systemFont(ofSize: 11), color: .secondaryLabelColor)
-        let time = label(row.timeText, font: .monospacedDigitSystemFont(ofSize: 11, weight: .regular),
+        let time = label(row.timeText, font: Self.timeFont,
                          color: .tertiaryLabelColor)
         time.alignment = .right
         time.setContentCompressionResistancePriority(.required, for: .horizontal)
         time.setContentHuggingPriority(.required, for: .horizontal)
 
-        for view in [dot, name, detail, time] {
+        bell.imageScaling = .scaleNone
+        for view in [dot, name, detail, bell, time] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -72,15 +108,18 @@ final class SessionRowView: NSView {
 
             name.leadingAnchor.constraint(equalTo: dot.trailingAnchor, constant: 10),
             name.bottomAnchor.constraint(equalTo: centerYAnchor, constant: 1),
-            name.trailingAnchor.constraint(lessThanOrEqualTo: time.leadingAnchor, constant: -8),
+            name.trailingAnchor.constraint(lessThanOrEqualTo: bell.leadingAnchor, constant: -8),
 
             detail.leadingAnchor.constraint(equalTo: name.leadingAnchor),
             detail.topAnchor.constraint(equalTo: centerYAnchor, constant: 1),
-            detail.trailingAnchor.constraint(lessThanOrEqualTo: time.leadingAnchor, constant: -8),
+            detail.trailingAnchor.constraint(lessThanOrEqualTo: bell.leadingAnchor, constant: -8),
 
-            // intrinsicContentSize under-reports the drawn width by a point or
-            // two for this font, which would truncate "8m ago" to "8m a…".
-            time.widthAnchor.constraint(greaterThanOrEqualToConstant: ceil(time.fittingSize.width) + 2),
+            bell.trailingAnchor.constraint(equalTo: time.leadingAnchor, constant: -8),
+            bell.centerYAnchor.constraint(equalTo: centerYAnchor),
+            bell.widthAnchor.constraint(equalToConstant: 16),
+
+            // A fixed column keeps the bells aligned across rows.
+            time.widthAnchor.constraint(equalToConstant: Self.timeColumnWidth),
             time.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
             time.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])

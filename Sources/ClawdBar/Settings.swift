@@ -1,21 +1,16 @@
 import Foundation
 import ServiceManagement
 
-/// User preferences, persisted in `UserDefaults`. Everything is off by default.
+/// User preferences.
 enum Settings {
     private enum Key {
-        static let notifications = "notificationsEnabled"
-        static let sound = "soundEnabled"
+        static let armedAlarms = "armedAlarms"
     }
 
-    static var notificationsEnabled: Bool {
-        get { UserDefaults.standard.bool(forKey: Key.notifications) }
-        set { UserDefaults.standard.set(newValue, forKey: Key.notifications) }
-    }
-
-    static var soundEnabled: Bool {
-        get { UserDefaults.standard.bool(forKey: Key.sound) }
-        set { UserDefaults.standard.set(newValue, forKey: Key.sound) }
+    /// Session ids with an armed alarm, kept across app restarts.
+    static var armedAlarms: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: Key.armedAlarms) ?? []) }
+        set { UserDefaults.standard.set(newValue.sorted(), forKey: Key.armedAlarms) }
     }
 
     /// Backed by the system's login item registry rather than `UserDefaults`,
