@@ -106,6 +106,12 @@ Choose **Remove Claude Code Hooks** from the menu, quit the app, then run
 `make uninstall` and delete `~/.claude/clawd-bar`. Running sessions keep
 their old hook configuration until they restart.
 
+## Support
+
+Clawd Bar is a personal side project, shared as is. There is no guarantee of
+support, fixes, or updates. Issues and pull requests are welcome, but may not
+get a response.
+
 ## License
 
 MIT. Clawd Bar is an independent project and is not affiliated with Anthropic.
