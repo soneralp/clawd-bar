@@ -32,6 +32,9 @@ public enum Transition {
             record.cwd = event.cwd
             record.project = projectName(fromCwd: event.cwd, home: home)
         }
+        if let path = event.transcriptPath, !path.isEmpty {
+            record.transcriptPath = path
+        }
         let previousState = current?.state
 
         switch event.name {

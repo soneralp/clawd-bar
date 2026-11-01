@@ -80,9 +80,9 @@ Claude Code ──hook event (JSON on stdin)──▶ clawd-hook ──writes─
 - **Yellow lingers after approval.** Claude Code does not emit an event when you
   approve a permission prompt. The icon turns orange again when that tool call
   finishes.
-- **Interrupting with Esc.** Cancelling a prompt or a running turn sends no
-  event. The session keeps its last state until your next message, or until
-  Claude Code's idle reminder for a turn that was running.
+- **Interrupting with Esc.** Claude Code sends no hook event when you cancel a
+  turn. Clawd Bar notices the interruption in the session transcript and marks
+  the session done, which can take up to about 15 seconds.
 - **Headless runs count.** `claude -p` invocations from scripts also appear,
   since hooks cannot tell interactive and headless sessions apart.
 

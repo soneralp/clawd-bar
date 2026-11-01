@@ -228,6 +228,13 @@ final class TransitionTests: XCTestCase {
         XCTAssertEqual(HookEvent(jsonData: data)?.transcriptPath, "/t/s.jsonl")
     }
 
+    func testTranscriptPathIsRecorded() throws {
+        var json: [String: Any] = ["hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": cwd]
+        json["transcript_path"] = "/t/s1.jsonl"
+        let event = try XCTUnwrap(HookEvent(jsonData: try JSONSerialization.data(withJSONObject: json)))
+        XCTAssertEqual(apply(event, to: nil)?.transcriptPath, "/t/s1.jsonl")
+    }
+
     func testTitlesOnlyOverwriteWhenFound() {
         var record = current(.running)
         record.customTitle = "Mine"

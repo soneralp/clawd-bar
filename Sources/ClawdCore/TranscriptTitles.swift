@@ -20,18 +20,8 @@ public enum TranscriptTitles {
     public static let defaultTailBytes = 64 * 1024
 
     public static func read(from url: URL, tailBytes: Int = defaultTailBytes) -> Titles {
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return Titles() }
-        defer { try? handle.close() }
-
-        guard let size = try? handle.seekToEnd() else { return Titles() }
-        let offset = size > UInt64(tailBytes) ? size - UInt64(tailBytes) : 0
-        guard (try? handle.seek(toOffset: offset)) != nil,
-              let data = try? handle.readToEnd()
-        else { return Titles() }
-
-        var lines = data.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: true)
-        // The first line is almost certainly cut in half when we start mid-file.
-        if offset > 0, !lines.isEmpty { lines.removeFirst() }
+        guard let tail = TranscriptTail.read(url, tailBytes: tailBytes) else { return Titles() }
+        let lines = tail.lines
 
         var titles = Titles()
         for line in lines.reversed() where titles.custom == nil || titles.ai == nil {

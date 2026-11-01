@@ -48,8 +48,9 @@ final class StatusController: NSObject, NSMenuDelegate {
 
     /// Reloads all records, drops sessions whose process is gone and updates the UI.
     func refresh() {
-        let records = store.prune(isAlive: ProcessTree.isAlive)
-        let next = Aggregate(records: records, now: Date().timeIntervalSince1970)
+        let now = Date().timeIntervalSince1970
+        let records = store.settleInterruptedSessions(store.prune(isAlive: ProcessTree.isAlive), now: now)
+        let next = Aggregate(records: records, now: now)
         ringAlarms(from: aggregate, to: next)
         aggregate = next
         render()

@@ -30,6 +30,8 @@ public struct SessionRecord: Codable, Equatable, Sendable {
     public var customTitle: String?
     /// The title Claude Code generated for the conversation, if any.
     public var aiTitle: String?
+    /// The session's transcript (`*.jsonl`), used to notice interrupted turns.
+    public var transcriptPath: String?
 
     /// The session's name: the user's own title first, then the generated one.
     public var title: String? { customTitle ?? aiTitle }
@@ -45,7 +47,8 @@ public struct SessionRecord: Codable, Equatable, Sendable {
         stateSince: TimeInterval,
         updatedAt: TimeInterval,
         customTitle: String? = nil,
-        aiTitle: String? = nil
+        aiTitle: String? = nil,
+        transcriptPath: String? = nil
     ) {
         self.sessionId = sessionId
         self.pid = pid
@@ -58,5 +61,6 @@ public struct SessionRecord: Codable, Equatable, Sendable {
         self.updatedAt = updatedAt
         self.customTitle = customTitle
         self.aiTitle = aiTitle
+        self.transcriptPath = transcriptPath
     }
 }
