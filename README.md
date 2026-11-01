@@ -31,7 +31,7 @@ long. Each row is labeled with the session's name: the one you set with
 ## Install
 
 ```sh
-git clone <repository-url> clawd-bar
+git clone https://github.com/soneralp/clawd-bar.git
 cd clawd-bar
 make install          # builds, copies to /Applications and launches
 ```
