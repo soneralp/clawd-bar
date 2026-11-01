@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/images/icon.png" width="128" alt="Clawd Bar app icon"></p>
+
 # Clawd Bar
 
 A tiny macOS menu bar app that tells you, at a glance, whether your
